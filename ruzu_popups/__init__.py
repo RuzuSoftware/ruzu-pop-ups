@@ -1,29 +1,38 @@
 # Copyright 2020 Charles Henry
+import time
+import logging
 from aqt import mw
 from aqt.qt import *
 from aqt import QMainWindow, QPushButton
 from .gui.popup import RuzuPopup
+from .anki_utils import AnkiUtils
 from .gui.options import RuzuOptions
 from .ruzu_schedule import RuzuSchedule
-from .anki_utils import AnkiUtils
-import time
+
+logger = logging.getLogger(__name__.split('.')[0])
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s", "%H:%M:%S")
+sh = logging.StreamHandler(sys.stdout)
+sh.setFormatter(formatter)
+logger.addHandler(sh)
+logger.setLevel(logging.WARNING)
+
 
 ruzu_popup = RuzuPopup(mw)
 anki_utils = AnkiUtils()
 
 
 def show_next_card():
-    print('show_next_card: ', time.ctime())
+    logger.info('show_next_card: %s' % time.ctime())
     ruzu_popup.show_question_popup()
 
 
 def hide_card():
-    print('hide_card: ', time.ctime())
+    logger.info('hide_card: %s' % time.ctime())
     ruzu_popup.hide_card()
 
 
 def show_debug(rschedule):
-    print("start_app ", time.ctime())
+    logger.info("start_app %s" % time.ctime())
     win = QMainWindow(parent=mw)
     win.setGeometry(0, 0, 400, 300)
     win.setWindowTitle("Window Title")
@@ -57,7 +66,7 @@ def show_options():
 ruzu_schedule = RuzuSchedule(show_next_card, hide_card)
 ruzu_schedule.set_schedule(anki_utils.get_config()['frequency'] * 60)
 if anki_utils.get_config()['enabled']:
-    print('Starting Ruzu Pop-ups...')
+    logger.info('Starting Ruzu Pop-ups...')
     ruzu_schedule.start_schedule()
 
 mw.addonManager.setConfigAction(__name__, show_options)

@@ -1,7 +1,7 @@
 # Copyright 2020 Charles Henry
 from aqt import QLabel, QGridLayout, QPushButton, QDialog, QCheckBox, QComboBox
 from ..anki_utils import AnkiUtils
-
+import logging
 
 class RuzuOptions(QDialog):
 
@@ -10,6 +10,7 @@ class RuzuOptions(QDialog):
         self.anki_utils = AnkiUtils()
         self.ruzu_schedule = ruzu_schedule
         self.config = self.anki_utils.get_config()
+        self.logger = logging.getLogger(__name__.split('.')[0])
         ###
         # Top level Window
         ###
@@ -30,7 +31,6 @@ class RuzuOptions(QDialog):
         # Frequency
         self.freq_select_text = QLabel(text='Pop-up Frequency')
         self.freq_select_map = {
-            'Every 5 seconds': 5/60,
             'Every Minute': 1,
             'Every 3 Minutes': 3,
             'Every 5 Minutes': 5,
@@ -48,7 +48,8 @@ class RuzuOptions(QDialog):
         try:
             freq_select_idx = list(self.freq_select_map.values()).index(self.config['frequency'])
         except ValueError:
-            print('Default frequency to Every 5 Minutes')
+            self.logger.warning('Issue setting frequency dropdown based on config value, '
+                                'setting frequency dropdown to default (Every 5 Minutes)')
             freq_select_idx = 2
         finally:
             self.freq_select.setCurrentIndex(freq_select_idx)
@@ -59,10 +60,11 @@ class RuzuOptions(QDialog):
         self.enabled_check.setChecked(self.config['enabled'])
 
         # OK
-        self.ok_btn = QPushButton(text='OK')
-        self.ok_btn.clicked.connect(self.save_and_close)
-        # Cancel
-        self.close_btn = QPushButton(text='Cancel')
+        self.ok_btn = QPushButton(text='Save')
+        self.ok_btn.clicked.connect(self.update_config)
+
+        # Close
+        self.close_btn = QPushButton(text='Close')
         self.close_btn.clicked.connect(self.hide)
 
         ###
@@ -79,12 +81,8 @@ class RuzuOptions(QDialog):
         self.grid.addWidget(self.close_btn, 3, 1)
         self.setLayout(self.grid)
 
-    def save_and_close(self):
-        self.update_config()
-        self.hide()
-
     def update_config(self):
-        print('Update config...')
+        self.logger.info('Update config...')
         self.config = {
             "deck": self.deck_select.currentText(),
             "frequency": self.freq_select_map[self.freq_select.currentText()],
@@ -95,5 +93,4 @@ class RuzuOptions(QDialog):
         self.anki_utils.set_config(self.config)
         self.ruzu_schedule.update_state(self.config)
 
-        # TODO - Remove debug
-        print(self.anki_utils.get_config())
+        self.logger.debug("New config value: %s" % self.anki_utils.get_config())

@@ -3,6 +3,7 @@ from aqt.webview import AnkiWebView
 from PyQt5 import QtCore
 from aqt import Qt, QWidget, QGridLayout, QPushButton, QDialog, QHBoxLayout
 from ..anki_utils import AnkiUtils
+import logging
 
 
 class RuzuPopup(QDialog):
@@ -12,6 +13,7 @@ class RuzuPopup(QDialog):
         self.anki_utils = AnkiUtils()
         self.current_card_id = None
         self.cur_button_count = 0
+        self.logger = logging.getLogger(__name__.split('.')[0])
 
         # popup_window (QWidget)
         # -grid (QGridLayout)
@@ -128,34 +130,35 @@ class RuzuPopup(QDialog):
                 """)
 
     def pre_popup_validate(self):
-        print('pre_popup_validate...')
+        self.logger.info('pre_popup_validate...')
         # Get current deck from config
         current_deck = self.anki_utils.get_config()['deck']
 
         # Check that review is active and current deck is as expected (if not then start review)
         if not self.anki_utils.review_is_active() or current_deck != self.anki_utils.selected_deck():
-            print('Start review...')
+            self.logger.info('Start review...')
             review_started = self.anki_utils.move_to_review_state(current_deck)
-            print('review_started: %s' % review_started)
+            self.logger.info('review_started: %s' % review_started)
             if not review_started:
-                print('Failed to start review...')
+                raise Exception('Failed to start review...')
             if review_started and not self.anki_utils.review_is_active():
-                print('No cards left to review')
+                self.logger.info('No cards left to review')
                 # TODO - Show popup saying no cards left, state that schedule is now off
                 # TODO - Turn off schedule automatically
 
     def show_answer_popup(self):
-        print('show_answer_popup...')
+        self.logger.info('show_answer_popup...')
         self.popup_window.hide()
         self.pre_popup_validate()
+
+        # TODO - Extra if this fails for some reason
         show_ans_result = self.anki_utils.show_answer()
-        print('Show Answer Result: %s' % show_ans_result)
+        self.logger.debug('Show Answer Result: %s' % show_ans_result)
 
         # Collect card details (html, css, buttons)
         current_card = self.anki_utils.get_current_card()
         if self.current_card_id != current_card['card_id']:
-            # TODO - Inform user of this action?
-            print('Card has changed, show new card...')
+            self.logger.info('Card has changed, show new card...')
             self.show_question_popup()
         else:
             self.cur_button_count = len(current_card['button_list'])
@@ -167,16 +170,16 @@ class RuzuPopup(QDialog):
             self.popup_window.show()
 
     def show_question_popup(self):
-        print('display_popup...')
+        self.logger.info('display_popup...')
         self.popup_window.hide()
         self.pre_popup_validate()
         show_q_result = self.anki_utils.show_question()
-        print('Show Question Result: %s' % show_q_result)
+        self.logger.debug('Show Question Result: %s' % show_q_result)
 
         # Collect card details (html, css, buttons)
         current_card = self.anki_utils.get_current_card()
         self.current_card_id = current_card['card_id']
-        print('Setting current card to %s' % current_card['card_id'])
+        self.logger.debug('Setting current card to %s' % current_card['card_id'])
         self.update_card(current_card['question'])
         self.show_question_button()
 
@@ -192,9 +195,7 @@ class RuzuPopup(QDialog):
             elif ease_name == "Good":
                 ease = 2
             else:
-                # TODO - Handle this error better, notify user?
-                print('Invalid ease used, expected [Again] or [Good] but got [%s]' % ease_name)
-                ease = 0
+                raise Exception('Invalid ease used, expected [Again] or [Good] but got [%s]' % ease_name)
         elif self.cur_button_count == 3:
             if ease_name == "Again":
                 ease = 1
@@ -203,9 +204,7 @@ class RuzuPopup(QDialog):
             elif ease_name == "Easy":
                 ease = 3
             else:
-                # TODO - Handle this error better, notify user?
-                print('Invalid ease used, expected [Again], [Good] or [Easy] but got [%s]' % ease_name)
-                ease = 0
+                raise Exception('Invalid ease used, expected [Again], [Good] or [Easy] but got [%s]' % ease_name)
         else:
             if ease_name == "Again":
                 ease = 1
@@ -216,14 +215,13 @@ class RuzuPopup(QDialog):
             elif ease_name == "Easy":
                 ease = 4
             else:
-                # TODO - Handle this error better, notify user?
-                print('Invalid ease used, expected [Again], [Hard], [Good] or [Easy] but got [%s]' % ease_name)
-                ease = 0
+                raise Exception('Invalid ease used, expected '
+                                '[Again], [Hard], [Good] or [Easy] but got [%s]' % ease_name)
 
         # Only attempt to answer card if ease is valid
         if ease != 0:
-            print('send_answer with ease_name [%s]' % ease_name)
-            print('send_answer with ease [%s]' % ease)
+            self.logger.debug('send_answer with ease_name [%s]' % ease_name)
+            self.logger.debug('send_answer with ease [%s]' % ease)
 
             # Get current card and check it's the expected card
             current_card = self.anki_utils.get_current_card()
@@ -231,10 +229,10 @@ class RuzuPopup(QDialog):
             if current_card['card_id'] == self.current_card_id:
                 # Send the answer
                 answer_result = self.anki_utils.answer_card(ease)
-                print('answer_result: %s' % answer_result)
+                self.logger.debug('answer_result: %s' % answer_result)
             else:
-                # TODO - Handle this error better, notify user?
-                print('The card you tried to answer is no longer the card being reviewed...')
+                # TODO - Handle this better, notify user?
+                self.logger.warning('The card you tried to answer is no longer the card being reviewed...')
 
         self.hide_card()
 

@@ -1,6 +1,7 @@
 # Copyright 2020 Charles Henry
 from PyQt5.QtCore import QTimer
 import time
+import logging
 
 
 class RuzuSchedule:
@@ -12,29 +13,30 @@ class RuzuSchedule:
         self.timer = QTimer()
         self.timer.timeout.connect(self.exec_schedule)
         self.enabled = False
+        self.logger = logging.getLogger(__name__.split('.')[0])
 
     def set_schedule(self, interval):
-        print("set_schedule ", time.ctime())
+        self.logger.info("set_schedule %s" % time.ctime())
         self.schedule_interval = interval
 
     def exec_schedule(self):
-        print("exec_schedule ", time.ctime())
+        self.logger.info("exec_schedule %s" % time.ctime())
         self.alarm_func()
 
     def start_schedule(self):
-        print("start_schedule ", time.ctime())
+        self.logger.info("start_schedule %s" % time.ctime())
         self.timer.start(self.schedule_interval*1000)
         self.enabled = True
 
     def stop_schedule(self):
-        print("stop_schedule ", time.ctime())
+        self.logger.info("stop_schedule %s" % time.ctime())
         self.timer.stop()
         self.cancel_func()
         self.enabled = False
 
     def update_state(self, config):
         if self.schedule_interval != config['frequency'] * 60:
-            print('Existing freq: [%s], new freq: [%s]' % (self.schedule_interval, config['frequency'] * 60))
+            self.logger.debug('Existing freq: [%s], new freq: [%s]' % (self.schedule_interval, config['frequency'] * 60))
             self.schedule_interval = config['frequency'] * 60
             # Must restart schedule if it's already running
             if self.enabled:
@@ -42,7 +44,7 @@ class RuzuSchedule:
 
         # Restart schedule if flag has changed
         if self.enabled != config['enabled']:
-            print('Enabled flag changed from [%s] to [%s]' % (self.enabled, config['enabled']))
+            self.logger.debug('Enabled flag changed from [%s] to [%s]' % (self.enabled, config['enabled']))
             if config['enabled']:
                 self.start_schedule()
             else:

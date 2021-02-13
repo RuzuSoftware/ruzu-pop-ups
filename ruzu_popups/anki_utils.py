@@ -1,45 +1,45 @@
 # Copyright 2020 Charles Henry
 import aqt
-from aqt import mw
+
 
 class AnkiUtils:
 
-    def window(self):
+    def main_window(self):
         return aqt.mw
 
     def reviewer(self):
-        reviewer = self.window().reviewer
+        reviewer = self.main_window().reviewer
         if reviewer is None:
-            raise Exception('reviewer is not available')
+            raise Exception('There was an issue getting the reviewer')
         else:
             return reviewer
 
     def collection(self):
-        collection = self.window().col
+        collection = self.main_window().col
         if collection is None:
-            raise Exception('collection is not available')
+            raise Exception('There was an issue getting the collection')
         else:
             return collection
 
     def selected_deck(self):
-        return self.window()._selectedDeck()['name']
+        return self.main_window()._selectedDeck()['name']
 
     def get_decks(self):
         decks = self.collection().decks
         if decks is None:
-            raise Exception('decks are not available')
+            raise Exception('There was an issue getting the decks')
         else:
             return decks.all_names_and_ids()
 
     def scheduler(self):
         scheduler = self.collection().sched
         if scheduler is None:
-            raise Exception('scheduler is not available')
+            raise Exception('There was an issue getting the scheduler')
         else:
             return scheduler
 
     def review_is_active(self):
-        return self.reviewer().card is not None and self.window().state == 'review'
+        return self.reviewer().card is not None and self.main_window().state == 'review'
 
     def show_question(self):
         if self.review_is_active():
@@ -50,7 +50,7 @@ class AnkiUtils:
 
     def show_answer(self):
         if self.review_is_active():
-            self.window().reviewer._showAnswer()
+            self.main_window().reviewer._showAnswer()
             return True
         else:
             return False
@@ -74,14 +74,14 @@ class AnkiUtils:
             deck = collection.decks.byName(name)
             if deck is not None:
                 collection.decks.select(deck['id'])
-                self.window().onOverview()
+                self.main_window().onOverview()
                 return True
 
         return False
 
     def move_to_review_state(self, name):
         if self.move_to_overview_state(name):
-            self.window().moveToState('review')
+            self.main_window().moveToState('review')
             return True
         else:
             return False
@@ -102,7 +102,7 @@ class AnkiUtils:
 
     def get_current_card(self):
         if not self.review_is_active():
-            raise Exception('Gui review is not currently active.')
+            raise Exception('There was an issue getting the current card because review is not currently active.')
 
         reviewer = self.reviewer()
         card = reviewer.card
@@ -112,7 +112,7 @@ class AnkiUtils:
             button_list = reviewer._answerButtonList()
             response = {
                 'card_id': card.id,
-                'question': self.get_question(card)[0], # Look into why a tuple is returned here...
+                'question': self.get_question(card)[0],  # TODO - Look into why a tuple is returned here...
                 'answer': self.get_answer(card),
                 'css': model['css'],
                 'button_list': button_list
@@ -122,10 +122,10 @@ class AnkiUtils:
 
     def get_config(self):
         # Do some checks to ensure the config is valid
-        config = mw.addonManager.getConfig(__name__.split('.')[0])
+        config = self.main_window().addonManager.getConfig(__name__.split('.')[0])
         if not config:
             raise Exception('Config file seems to be invalid, correct or restore default config to resolve this issue.')
         return config
 
     def set_config(self, config):
-        mw.addonManager.writeConfig(__name__.split('.')[0], config)
+        self.main_window().addonManager.writeConfig(__name__.split('.')[0], config)
