@@ -18,8 +18,8 @@ jobs:
       - name: Upload site content
         uses: actions/upload-artifact@v2
         with:
-          name: ruzu_popups-${GITHUB_REF/refs\/tags\//}.ankiaddon
-          path: ruzu_popups-${GITHUB_REF/refs\/tags\//}.ankiaddon
+          name: ruzu_popups-${{ echo ${GITHUB_REF/refs\/tags\//} }}.ankiaddon
+          path: ruzu_popups-${{ echo ${GITHUB_REF/refs\/tags\//} }}.ankiaddon
           if-no-files-found: error
   release:
     name: Create release with packaged addon attached
