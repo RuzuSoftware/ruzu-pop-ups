@@ -17,12 +17,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
       - name: Package code
-        run: echo ${{ steps.set_release_version.outputs.VERSION }} && echo ../ruzu_popups-${{ steps.set_release_version.outputs.VERSION }}.ankiaddon && cd ruzu_popups && zip -r ../ruzu_popups-${{ steps.set_release_version.outputs.VERSION }}.ankiaddon *
+        run: echo ${{ steps.set_release_version.outputs.RELEASE_VERSION }} && echo ../ruzu_popups-${{ steps.set_release_version.outputs.RELEASE_VERSION }}.ankiaddon && cd ruzu_popups && zip -r ../ruzu_popups-${{ steps.set_release_version.outputs.RELEASE_VERSION }}.ankiaddon *
       - name: Upload site content
         uses: actions/upload-artifact@v2
         with:
-          name: ruzu_popups-${{ steps.set_release_version.outputs.VERSION }}.ankiaddon
-          path: ruzu_popups-${{ steps.set_release_version.outputs.VERSION }}.ankiaddon
+          name: ruzu_popups-${{ steps.set_release_version.outputs.RELEASE_VERSION }}.ankiaddon
+          path: ruzu_popups-${{ steps.set_release_version.outputs.RELEASE_VERSION }}.ankiaddon
           if-no-files-found: error
   release:
     name: Create release with packaged addon attached
