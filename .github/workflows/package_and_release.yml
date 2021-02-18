@@ -14,12 +14,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
       - name: Package code
-        run: cd ruzu_popups && zip -r ../ruzu_popups-${GITHUB_REF#refs/*/}.ankiaddon *
+        run: cd ruzu_popups && zip -r ../ruzu_popups-${{GITHUB_REF/refs\/tags\//}}.ankiaddon *
       - name: Upload site content
         uses: actions/upload-artifact@v2
         with:
-          name: ruzu_popups-${GITHUB_REF#refs/*/}.ankiaddon
-          path: ruzu_popups-${GITHUB_REF#refs/*/}.ankiaddon
+          name: ruzu_popups-${{GITHUB_REF/refs\/tags\//}}.ankiaddon
+          path: ruzu_popups-${{GITHUB_REF/refs\/tags\//}}.ankiaddon
   release:
     name: Create release with packaged addon attached
     runs-on: ubuntu-20.04
@@ -28,21 +28,21 @@ jobs:
       - name: Download .ankiaddon file
         uses: actions/download-artifact@v2
         with:
-          name: ruzu_popups-${GITHUB_REF#refs/*/}.ankiaddon
+          name: ruzu_popups-${{GITHUB_REF/refs\/tags\//}}.ankiaddon
       - name: Create GitHub release
         id: create-release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${GITHUB_REF#refs/*/}
-          release_name: Release ${GITHUB_REF#refs/*/}
+          tag_name: ${{GITHUB_REF/refs\/tags\//}}
+          release_name: Release ${{GITHUB_REF/refs\/tags\//}}
       - name: Upload asset to GitHub release
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create-release.outputs.upload_url }}
-          asset_path: ruzu_popups-${GITHUB_REF#refs/*/}.ankiaddon
-          asset_name: ruzu_popups-${GITHUB_REF#refs/*/}.ankiaddon
+          asset_path: ruzu_popups-${{GITHUB_REF/refs\/tags\//}}.ankiaddon
+          asset_name: ruzu_popups-${{GITHUB_REF/refs\/tags\//}}.ankiaddon
           asset_content_type: application/zip
