@@ -11,13 +11,13 @@ jobs:
     name: Package source code into .ankiaddon file
     runs-on: ubuntu-20.04
     steps:
-      - name: Set RELEASE_VERSION
+      - name: Set Release Version
         id: get_tag
-        run: echo ::set-output name=VER::${{ steps.get_tag.outputs.VER }}
+        run: echo ::set-output name=VER::${GITHUB_REF/refs\/tags\//}
       - name: Checkout code
         uses: actions/checkout@v2
       - name: Package code
-        run: echo ${{ steps.get_tag.outputs.VER }} && echo ../ruzu_popups-${{ steps.get_tag.outputs.VER }}.ankiaddon && cd ruzu_popups && zip -r ../ruzu_popups-${{ steps.get_tag.outputs.VER }}.ankiaddon *
+        run: cd ruzu_popups && zip -r ../ruzu_popups-${{ steps.get_tag.outputs.VER }}.ankiaddon *
       - name: Upload site content
         uses: actions/upload-artifact@v2
         with:
@@ -29,6 +29,9 @@ jobs:
     runs-on: ubuntu-20.04
     needs: package
     steps:
+      - name: Set Release Version
+        id: get_tag
+        run: echo ::set-output name=VER::${GITHUB_REF/refs\/tags\//}
       - name: Download .ankiaddon file
         uses: actions/download-artifact@v2
         with:
