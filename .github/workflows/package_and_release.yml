@@ -1,0 +1,52 @@
+# This workflow packages the code into an ankiaddon and attaches it to a release when a valid tag is created
+name: Package and release Anki addon
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+env:
+  RELEASE_VERSION: ${GITHUB_REF#refs/*/}
+  ANKI_ADDON_PACKAGE: ruzu_popups-${GITHUB_REF#refs/*/}.ankiaddon
+
+jobs:
+  package:
+    name: Package source code into .ankiaddon file
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Package code
+        run: cd ruzu_popups && zip -r ../${ANKI_ADDON_PACKAGE} *
+      - name: Upload site content
+        uses: actions/upload-artifact@v2
+        with:
+          name: ruzu_popups-${{ github.event.release.tag_name }}.ankiaddon
+          path: ruzu_popups/${ANKI_ADDON_PACKAGE}
+  release:
+    name: Create release with packaged addon attached
+    runs-on: ubuntu-latest
+    needs: package
+    steps:
+      - name: Download .ankiaddon file
+        uses: actions/download-artifact@v2
+        with:
+          name: ${ANKI_ADDON_PACKAGE}
+      - name: Create GitHub release
+        id: create-release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${RELEASE_VERSION}
+          release_name: Release ${RELEASE_VERSION}
+      - name: Upload asset to GitHub release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create-release.outputs.upload_url }}
+          asset_path: ./${ANKI_ADDON_PACKAGE}
+          asset_name: ${ANKI_ADDON_PACKAGE}
+          asset_content_type: application/zip
