@@ -10,9 +10,9 @@ jobs:
   package:
     name: Package source code into .ankiaddon file
     runs-on: ubuntu-20.04
-    env:
-      RELEASE_VERSION: ${GITHUB_REF/refs\/tags\//}
     steps:
+      - name: Set RELEASE_VERSION
+        run: echo ::set-output name=RELEASE_VERSION::${GITHUB_REF/refs\/tags\//}
       - name: Checkout code
         uses: actions/checkout@v2
       - name: Package code
