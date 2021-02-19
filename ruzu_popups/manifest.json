@@ -1,6 +1,7 @@
 {
-    "name": "Ruzu Pop-ups",
     "package": "ruzu_pop_ups",
+    "name": "Ruzu Pop-ups",
+    "mod": <MOD>,
     "author": "Ruzu Studios",
-    "homepage": "https://github.com/RuzuStudios/ruzu-pop-ups"
+    "human_version": "<VERSION>"
 }

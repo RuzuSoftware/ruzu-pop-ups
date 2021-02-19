@@ -70,12 +70,8 @@ if anki_utils.get_config()['enabled']:
     ruzu_schedule.start_schedule()
 
 mw.addonManager.setConfigAction(__name__, show_options)
-# Init UI with reference to Ruzu Schedule
-# start_app(ruzu_schedule)
 
-
-# create a new menu item, "test"
-
+# Add debug options, to be removed in future version
 options_action = QAction("Ruzu Pop-ups Debug", mw)
 options_action.triggered.connect(lambda _: show_debug(ruzu_schedule))
 mw.form.menuTools.addAction(options_action)

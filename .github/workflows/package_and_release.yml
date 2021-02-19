@@ -16,8 +16,13 @@ jobs:
         run: echo ::set-output name=VER::${GITHUB_REF/refs\/tags\//}
       - name: Checkout code
         uses: actions/checkout@v2
+      - name: Update manifest
+        run: |
+          cd ruzu_popups
+          sed -i "s/<MOD>/$(date +%s)/g" manifest.json
+          sed -i "s/<VERSION>/${{ steps.get_tag.outputs.VER }}/g" manifest.json
       - name: Package code
-        run: cd ruzu_popups && zip -r ../ruzu_popups-${{ steps.get_tag.outputs.VER }}.ankiaddon *
+        run: zip -r ../ruzu_popups-${{ steps.get_tag.outputs.VER }}.ankiaddon *
       - name: Upload site content
         uses: actions/upload-artifact@v2
         with:
