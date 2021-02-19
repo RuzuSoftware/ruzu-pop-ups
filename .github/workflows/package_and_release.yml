@@ -22,7 +22,7 @@ jobs:
           sed -i "s/<MOD>/$(date +%s)/g" manifest.json
           sed -i "s/<VERSION>/${{ steps.get_tag.outputs.VER }}/g" manifest.json
       - name: Package code
-        run: zip -r ../ruzu_popups-${{ steps.get_tag.outputs.VER }}.ankiaddon *
+        run: cd ruzu_popups && zip -r ../ruzu_popups-${{ steps.get_tag.outputs.VER }}.ankiaddon *
       - name: Upload site content
         uses: actions/upload-artifact@v2
         with:
