@@ -1,0 +1,60 @@
+# This workflow packages the code into an ankiaddon and attaches it to a release when a valid tag is created
+name: Package and release Anki addon
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  package:
+    name: Package source code into .ankiaddon file
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Set Release Version
+        id: get_tag
+        run: echo ::set-output name=VER::${GITHUB_REF/refs\/tags\//}
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Update manifest
+        run: |
+          cd ruzu_popups
+          sed -i "s/<MOD>/$(date +%s)/g" manifest.json
+          sed -i "s/<VERSION>/${{ steps.get_tag.outputs.VER }}/g" manifest.json
+      - name: Package code
+        run: cd ruzu_popups && zip -r ../ruzu_popups-${{ steps.get_tag.outputs.VER }}.ankiaddon *
+      - name: Upload site content
+        uses: actions/upload-artifact@v2
+        with:
+          name: ruzu_popups-${{ steps.get_tag.outputs.VER }}.ankiaddon
+          path: ruzu_popups-${{ steps.get_tag.outputs.VER }}.ankiaddon
+          if-no-files-found: error
+  release:
+    name: Create release with packaged addon attached
+    runs-on: ubuntu-20.04
+    needs: package
+    steps:
+      - name: Set Release Version
+        id: get_tag
+        run: echo ::set-output name=VER::${GITHUB_REF/refs\/tags\//}
+      - name: Download .ankiaddon file
+        uses: actions/download-artifact@v2
+        with:
+          name: ruzu_popups-${{ steps.get_tag.outputs.VER }}.ankiaddon
+      - name: Create GitHub release
+        id: create-release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.get_tag.outputs.VER }}
+          release_name: Release ${{ steps.get_tag.outputs.VER }}
+      - name: Upload asset to GitHub release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create-release.outputs.upload_url }}
+          asset_path: ruzu_popups-${{ steps.get_tag.outputs.VER }}.ankiaddon
+          asset_name: ruzu_popups-${{ steps.get_tag.outputs.VER }}.ankiaddon
+          asset_content_type: application/zip

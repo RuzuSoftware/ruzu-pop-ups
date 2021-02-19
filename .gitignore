@@ -1,3 +1,4 @@
 .idea/
 *.pyc
 ruzu_popups/meta.json
+*.ankiaddon
