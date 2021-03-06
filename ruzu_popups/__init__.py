@@ -22,7 +22,7 @@ anki_utils = AnkiUtils()
 
 def show_next_card():
     logger.info('show_next_card: %s' % time.ctime())
-    ruzu_popup.show_question_popup()
+    ruzu_popup.show_popup()
 
 
 def hide_card():

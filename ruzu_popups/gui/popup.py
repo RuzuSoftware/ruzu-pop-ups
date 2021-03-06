@@ -57,6 +57,9 @@ class RuzuPopup(QDialog):
         self.btn.append(QPushButton(text="Show Answer"))
         self.btn[4].setGeometry(btn_padding, btn_padding, btn_width, btn_height)
         self.btn[4].clicked.connect(lambda _: self.show_answer_popup())
+        self.btn.append(QPushButton(text="Reveal Question"))
+        self.btn[5].setGeometry(btn_padding, btn_padding, btn_width, btn_height)
+        self.btn[5].clicked.connect(lambda _: self.show_question_popup())
 
         ###
         # Layout management - Add objects to main pop-up window
@@ -84,14 +87,19 @@ class RuzuPopup(QDialog):
         msg_geo.moveBottomRight(screen_geo)
         self.popup_window.move(msg_geo.topLeft())
 
+    def show_show_button(self):
+        for i in range(6):
+            self.bottom_grid_2.addWidget(self.btn[i])  # Remove all buttons
+        self.bottom_grid.addWidget(self.btn[5])
+
     def show_question_button(self):
-        for i in range(5):
+        for i in range(6):
             self.bottom_grid_2.addWidget(self.btn[i])  # Remove all buttons
         self.bottom_grid.addWidget(self.btn[4])
 
     def show_answer_buttons(self):
         # TODO - Take in actual buttons tuple?
-        for i in range(5):
+        for i in range(6):
             self.bottom_grid_2.addWidget(self.btn[i])  # Remove all buttons
         if self.cur_button_count == 2:
             self.bottom_grid.addWidget(self.btn[0])  # Again
@@ -106,6 +114,18 @@ class RuzuPopup(QDialog):
 
     def reset_card(self):
         self.card_view.setHtml(None)
+
+    def prep_card(self):
+        # Update card with 'Reveal card' html
+        self.card_view.setHtml("""
+                    <!doctype html>
+                    <html>
+                        <head></head>
+                        <body>
+                            <div style="margin: auto; text-align: center; line-height: 90vh; font-size: 60px;">🔔</div>
+                        </body>
+                    </html>
+                """)
 
     def update_card(self, card):
         # TODO - Look into using existing AnkiWebView object to render duplicate card with full compatibility
@@ -169,8 +189,20 @@ class RuzuPopup(QDialog):
             self.set_card_position()
             self.popup_window.show()
 
+    def show_popup(self):
+        self.logger.info('show_popup...')
+        # Enter pre reveal state based on user config
+        if self.anki_utils.get_config()['click_to_reveal']:
+            self.popup_window.hide()
+            self.prep_card()
+            self.show_show_button()
+            self.set_card_position()
+            self.popup_window.show()
+        else:
+            self.show_question_popup()
+
     def show_question_popup(self):
-        self.logger.info('display_popup...')
+        self.logger.info('show_question_popup...')
         self.popup_window.hide()
         self.pre_popup_validate()
         show_q_result = self.anki_utils.show_question()
@@ -218,24 +250,24 @@ class RuzuPopup(QDialog):
                 raise Exception('Invalid ease used, expected '
                                 '[Again], [Hard], [Good] or [Easy] but got [%s]' % ease_name)
 
-        # Only attempt to answer card if ease is valid
-        if ease != 0:
-            self.logger.debug('send_answer with ease_name [%s]' % ease_name)
-            self.logger.debug('send_answer with ease [%s]' % ease)
+        self.logger.debug('send_answer with ease_name [%s]' % ease_name)
+        self.logger.debug('send_answer with ease [%s]' % ease)
 
-            # Get current card and check it's the expected card
-            current_card = self.anki_utils.get_current_card()
-            current_card = self.anki_utils.get_current_card()
-            if current_card['card_id'] == self.current_card_id:
-                # Send the answer
-                answer_result = self.anki_utils.answer_card(ease)
-                self.logger.debug('answer_result: %s' % answer_result)
-            else:
-                # TODO - Handle this better, notify user?
-                self.logger.warning('The card you tried to answer is no longer the card being reviewed...')
+        # Get current card and check it's the expected card
+        current_card = self.anki_utils.get_current_card()
+        if current_card['card_id'] == self.current_card_id:
+            # Send the answer
+            answer_result = self.anki_utils.answer_card(ease)
+            self.logger.debug('answer_result: %s' % answer_result)
+        else:
+            # TODO - Handle this better, notify user?
+            self.logger.warning('The card you tried to answer is no longer the card being reviewed...')
 
         self.hide_card()
 
     def hide_card(self):
         self.reset_card()
         self.popup_window.hide()
+        current_deck = self.anki_utils.get_config()['deck']
+        review_ended = self.anki_utils.move_to_overview_state(current_deck)
+        self.logger.info('review_ended: %s' % review_ended)

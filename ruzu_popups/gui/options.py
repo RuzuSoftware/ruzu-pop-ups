@@ -55,6 +55,11 @@ class RuzuOptions(QDialog):
             self.freq_select.setCurrentIndex(freq_select_idx)
 
         # Enable Disable
+        self.click_to_reveal_check_text = QLabel(text='Click to reveal')
+        self.click_to_reveal_check = QCheckBox()
+        self.click_to_reveal_check.setChecked(self.config['click_to_reveal'])
+
+        # Enable Disable
         self.enabled_check_text = QLabel(text='Enable pop-ups')
         self.enabled_check = QCheckBox()
         self.enabled_check.setChecked(self.config['enabled'])
@@ -75,10 +80,12 @@ class RuzuOptions(QDialog):
         self.grid.addWidget(self.deck_select_text, 0, 0)
         self.grid.addWidget(self.freq_select, 1, 1)
         self.grid.addWidget(self.freq_select_text, 1, 0)
-        self.grid.addWidget(self.enabled_check, 2, 1)
-        self.grid.addWidget(self.enabled_check_text, 2, 0)
-        self.grid.addWidget(self.ok_btn, 3, 0)
-        self.grid.addWidget(self.close_btn, 3, 1)
+        self.grid.addWidget(self.click_to_reveal_check, 2, 1)
+        self.grid.addWidget(self.click_to_reveal_check_text, 2, 0)
+        self.grid.addWidget(self.enabled_check, 3, 1)
+        self.grid.addWidget(self.enabled_check_text, 3, 0)
+        self.grid.addWidget(self.ok_btn, 4, 0)
+        self.grid.addWidget(self.close_btn, 4, 1)
         self.setLayout(self.grid)
 
     def update_config(self):
@@ -87,6 +94,7 @@ class RuzuOptions(QDialog):
             "deck": self.deck_select.currentText(),
             "frequency": self.freq_select_map[self.freq_select.currentText()],
             "enabled": self.enabled_check.checkState() == 2,
+            "click_to_reveal": self.click_to_reveal_check.checkState() == 2,
             "window_location": "bottom_right",
             "show_marked_card_flag": False
         }

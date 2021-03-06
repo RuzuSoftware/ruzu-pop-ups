@@ -2,6 +2,7 @@
     "deck": "Default",
     "frequency": 5,
     "enabled": false,
+    "click_to_reveal": false,
     "window_location": "bottom_right",
     "show_marked_card_flag": false
 }
