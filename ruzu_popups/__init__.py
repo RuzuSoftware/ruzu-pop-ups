@@ -3,7 +3,6 @@ import time
 import logging
 from aqt import mw
 from aqt.qt import *
-from aqt import QMainWindow, QPushButton
 from .gui.popup import RuzuPopup
 from .anki_utils import AnkiUtils
 from .gui.options import RuzuOptions
@@ -32,7 +31,7 @@ def hide_card():
 
 def show_options():
     ruzu_options = RuzuOptions(mw, ruzu_schedule)
-    return ruzu_options.exec_()
+    return ruzu_options.show()
 
 
 # Init Ruzu Schedule

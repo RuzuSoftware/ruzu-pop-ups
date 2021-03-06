@@ -193,7 +193,7 @@ class RuzuPopup(QDialog):
         self.logger.info('show_popup...')
         # Enter pre reveal state based on user config
         if self.anki_utils.get_config()['click_to_reveal']:
-            self.popup_window.hide()
+            self.hide_card()
             self.prep_card()
             self.show_show_button()
             self.set_card_position()

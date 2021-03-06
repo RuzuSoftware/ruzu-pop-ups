@@ -1,9 +1,9 @@
 # Copyright 2020 Charles Henry
-from aqt import QLabel, QGridLayout, QPushButton, QDialog, QCheckBox, QComboBox
+from aqt import QLabel, QGridLayout, QPushButton, QWidget, QCheckBox, QComboBox, QMainWindow
 from ..anki_utils import AnkiUtils
 import logging
 
-class RuzuOptions(QDialog):
+class RuzuOptions(QMainWindow):
 
     def __init__(self, parent, ruzu_schedule):
         super().__init__(parent=parent)
@@ -72,6 +72,10 @@ class RuzuOptions(QDialog):
         self.close_btn = QPushButton(text='Close')
         self.close_btn.clicked.connect(self.hide)
 
+        # Show Next Card
+        self.show_card_btn = QPushButton(text='Show Next Card')
+        self.show_card_btn.clicked.connect(self.ruzu_schedule.exec_schedule)
+
         ###
         # Layout management - Add objects to main pop-up window
         ###
@@ -84,9 +88,12 @@ class RuzuOptions(QDialog):
         self.grid.addWidget(self.click_to_reveal_check_text, 2, 0)
         self.grid.addWidget(self.enabled_check, 3, 1)
         self.grid.addWidget(self.enabled_check_text, 3, 0)
-        self.grid.addWidget(self.ok_btn, 4, 0)
-        self.grid.addWidget(self.close_btn, 4, 1)
-        self.setLayout(self.grid)
+        self.grid.addWidget(self.show_card_btn, 4, 1)
+        self.grid.addWidget(self.ok_btn, 5, 0)
+        self.grid.addWidget(self.close_btn, 5, 1)
+        self.grid_widget = QWidget()
+        self.grid_widget.setLayout(self.grid)
+        self.setCentralWidget(self.grid_widget)
 
     def update_config(self):
         self.logger.info('Update config...')
