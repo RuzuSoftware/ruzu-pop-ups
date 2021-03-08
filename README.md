@@ -1,5 +1,7 @@
 # Ruzu Pop-ups Anki Addon
 
+![](images/pop_up_demo.gif)
+
 Ruzu Pop-ups is an [Anki](https://apps.ankiweb.net/) addon that periodically presents Anki cards using a small pop-up window.
 This allows you to review Anki decks whilst working on other important tasks!
 Cards from your chosen deck will periodically pop up for you to review.
