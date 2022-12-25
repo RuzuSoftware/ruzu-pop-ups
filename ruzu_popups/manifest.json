@@ -2,7 +2,7 @@
     "package": "ruzu_pop_ups",
     "name": "Ruzu Pop-ups",
     "mod": <MOD>,
-    "min_point_version": 28,
-    "max_point_version": 35,
+    "min_point_version": 50,
+    "max_point_version": 55,
     "human_version": "<VERSION>"
 }

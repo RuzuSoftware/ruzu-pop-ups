@@ -81,7 +81,8 @@ class RuzuPopup(QDialog):
     def set_card_position(self):
         # Move to bottom right of screen
         # https://stackoverflow.com/questions/28322073/move-qmessagebox-to-bottom-right-corner-of-the-screen
-        screen_geometry = self.parent.app.desktop().availableGeometry()
+        # https://forum.qt.io/topic/134570/qapplication-desktop-screengeometry-not-work-in-qt6
+        screen_geometry = self.parent.app.primaryScreen().availableGeometry()
         screen_geo = screen_geometry.bottomRight()
         msg_geo = self.popup_window.frameGeometry()
         msg_geo.moveBottomRight(screen_geo)
