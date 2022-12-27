@@ -1,5 +1,6 @@
 # Copyright 2020 Charles Henry
 import time
+import sys
 import logging
 from aqt import mw
 from aqt.qt import *
@@ -31,7 +32,7 @@ def hide_card():
 
 def show_options():
     ruzu_options = RuzuOptions(mw, ruzu_schedule)
-    return ruzu_options.show()
+    return ruzu_options.exec()
 
 
 # Init Ruzu Schedule

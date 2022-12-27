@@ -71,7 +71,7 @@ class AnkiUtils:
     def move_to_overview_state(self, name):
         collection = self.collection()
         if collection is not None:
-            deck = collection.decks.byName(name)
+            deck = collection.decks.by_name(name)
             if deck is not None:
                 collection.decks.select(deck['id'])
                 self.main_window().onOverview()
@@ -106,7 +106,7 @@ class AnkiUtils:
 
         reviewer = self.reviewer()
         card = reviewer.card
-        model = card.model()
+        note_type = card.note_type()
 
         if card is not None:
             button_list = reviewer._answerButtonList()
@@ -114,7 +114,7 @@ class AnkiUtils:
                 'card_id': card.id,
                 'question': self.get_question(card)[0],  # TODO - Look into why a tuple is returned here...
                 'answer': self.get_answer(card),
-                'css': model['css'],
+                'css': note_type['css'],
                 'button_list': button_list
             }
 

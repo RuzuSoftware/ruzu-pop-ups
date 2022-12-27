@@ -1,9 +1,11 @@
 # Copyright 2020 Charles Henry
-from aqt import QLabel, QGridLayout, QPushButton, QWidget, QCheckBox, QComboBox, QMainWindow
+from aqt import QLabel, QGridLayout, QPushButton, QWidget, QCheckBox, QComboBox, QDialog
+from aqt.qt import Qt
 from ..anki_utils import AnkiUtils
 import logging
 
-class RuzuOptions(QMainWindow):
+
+class RuzuOptions(QDialog):
 
     def __init__(self, parent, ruzu_schedule):
         super().__init__(parent=parent)
@@ -74,7 +76,7 @@ class RuzuOptions(QMainWindow):
 
         # Show Next Card
         self.show_card_btn = QPushButton(text='Show Next Card')
-        self.show_card_btn.clicked.connect(self.ruzu_schedule.exec_schedule)
+        self.show_card_btn.clicked.connect(self.show_next_card_and_close)
 
         ###
         # Layout management - Add objects to main pop-up window
@@ -91,21 +93,23 @@ class RuzuOptions(QMainWindow):
         self.grid.addWidget(self.show_card_btn, 4, 1)
         self.grid.addWidget(self.ok_btn, 5, 0)
         self.grid.addWidget(self.close_btn, 5, 1)
-        self.grid_widget = QWidget()
-        self.grid_widget.setLayout(self.grid)
-        self.setCentralWidget(self.grid_widget)
+        self.setLayout(self.grid)
 
     def update_config(self):
         self.logger.info('Update config...')
         self.config = {
             "deck": self.deck_select.currentText(),
             "frequency": self.freq_select_map[self.freq_select.currentText()],
-            "enabled": self.enabled_check.checkState() == 2,
-            "click_to_reveal": self.click_to_reveal_check.checkState() == 2,
+            "enabled": self.enabled_check.checkState() == Qt.CheckState.Checked,
+            "click_to_reveal": self.click_to_reveal_check.checkState() == Qt.CheckState.Checked,
             "window_location": "bottom_right",
             "show_marked_card_flag": False
         }
         self.anki_utils.set_config(self.config)
         self.ruzu_schedule.update_state(self.config)
-
         self.logger.debug("New config value: %s" % self.anki_utils.get_config())
+        self.close()
+
+    def show_next_card_and_close(self):
+        self.ruzu_schedule.exec_schedule()
+        self.close()
