@@ -135,6 +135,7 @@ class RuzuPopup(QDialog):
                     <html class=" webkit chrome win js">
                         <head>
                             <title>main webview</title>
+                            %(base)s
                             <style>
                                 body { zoom: 1; background: #f0f0f0; direction: ltr; font-size:12px;font-family:"Segoe UI"; }
                                 button { font-family:"Segoe UI"; }
@@ -144,7 +145,7 @@ class RuzuPopup(QDialog):
 
                         <body class="card card2 isWin">
                             <div id="qa" style="opacity: 1;">
-                                """ + card + """
+                                """ % dict(base=self.anki_utils.main_window().baseHTML()) + card + """
                             </div>
                         </body>
                     </html>
