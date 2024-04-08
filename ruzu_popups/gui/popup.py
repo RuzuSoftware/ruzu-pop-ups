@@ -1,6 +1,6 @@
 # Copyright 2020 Charles Henry
 from aqt.webview import AnkiWebView
-from PyQt5 import QtCore
+from PyQt6 import QtCore
 from aqt import Qt, QWidget, QGridLayout, QPushButton, QDialog, QHBoxLayout
 from ..anki_utils import AnkiUtils
 import logging
@@ -25,8 +25,8 @@ class RuzuPopup(QDialog):
         # Top level Pop-up Window
         ###
         parent.popup_window = self.popup_window = QWidget()
-        self.popup_window.setWindowFlag(QtCore.Qt.WindowStaysOnTopHint)
-        self.popup_window.setWindowFlag(Qt.FramelessWindowHint)  # Hide the title bar
+        self.popup_window.setWindowFlag(QtCore.Qt.WindowType.WindowStaysOnTopHint)
+        self.popup_window.setWindowFlag(QtCore.Qt.WindowType.FramelessWindowHint)  # Hide the title bar
         self.popup_window.setWindowTitle("Anki Review")  # Set the title (visible in windows taskbar)
         self.popup_window.setGeometry(0, 0, 400, 300)  # Set window geometry
 
