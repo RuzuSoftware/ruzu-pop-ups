@@ -74,7 +74,10 @@ class AnkiUtils:
             deck = collection.decks.by_name(name)
             if deck is not None:
                 collection.decks.select(deck['id'])
-                self.main_window().onOverview()
+                try:
+                    self.main_window().onOverview()
+                except AttributeError:
+                    pass
                 return True
 
         return False
