@@ -1,5 +1,5 @@
 # Copyright 2020 Charles Henry
-from PyQt5.QtCore import QTimer
+from PyQt6.QtCore import QTimer
 import time
 import logging
 
