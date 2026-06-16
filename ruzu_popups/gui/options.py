@@ -1,6 +1,5 @@
 # Copyright 2020 Charles Henry
 from aqt import QLabel, QGridLayout, QPushButton, QWidget, QCheckBox, QComboBox, QDialog
-from aqt.qt import Qt
 from ..anki_utils import AnkiUtils
 from .popup import THEME_ORDER, DEFAULT_THEME
 import logging
@@ -14,6 +13,9 @@ class RuzuOptions(QDialog):
         self.ruzu_schedule = ruzu_schedule
         self.config = self.anki_utils.get_config()
         self.logger = logging.getLogger(__name__.split('.')[0])
+        # While True, widget change signals are ignored (set False once all
+        # initial values are in place) so loading the dialog does not auto-save.
+        self._loading = True
         ###
         # Top level Window
         ###
@@ -68,7 +70,7 @@ class RuzuOptions(QDialog):
         self.enabled_check.setChecked(self.config['enabled'])
 
         # Self-typing mode
-        self.enable_self_typing_check_text = QLabel(text='Enable self-typing mode')
+        self.enable_self_typing_check_text = QLabel(text='Enable Text Input Mode')
         self.enable_self_typing_check = QCheckBox()
         self.enable_self_typing_check.setChecked(self.config.get('enable_self_typing', False))
 
@@ -79,10 +81,6 @@ class RuzuOptions(QDialog):
             self.theme_select.addItem(theme_name)
         self.theme_select.setCurrentIndex(
             max(self.theme_select.findText(self.config.get('theme', DEFAULT_THEME)), 0))
-
-        # OK
-        self.ok_btn = QPushButton(text='Save')
-        self.ok_btn.clicked.connect(self.update_config)
 
         # Close
         self.close_btn = QPushButton(text='Close')
@@ -116,30 +114,57 @@ class RuzuOptions(QDialog):
         self.grid.addWidget(self.theme_select_text, 5, 0)
         self.grid.addWidget(self.show_card_btn, 6, 1)
         self.grid.addWidget(self.reset_position_btn, 6, 0)
-        self.grid.addWidget(self.ok_btn, 7, 0)
         self.grid.addWidget(self.close_btn, 7, 1)
         self.setLayout(self.grid)
 
-    def update_config(self):
-        self.logger.info('Update config...')
+        # Settings are saved and applied immediately on every change (no Save
+        # button). Signals are connected only now, after all initial widget
+        # values have been set above, so loading the dialog does not trigger a
+        # save. The guard flag is belt-and-braces against any stray init signal.
+        self._loading = False
+        self.deck_select.currentIndexChanged.connect(self._on_setting_changed)
+        self.freq_select.currentIndexChanged.connect(self._on_setting_changed)
+        self.click_to_reveal_check.toggled.connect(self._on_setting_changed)
+        self.enabled_check.toggled.connect(self._on_setting_changed)
+        self.enable_self_typing_check.toggled.connect(self._on_setting_changed)
+        self.theme_select.currentIndexChanged.connect(self._on_setting_changed)
+
+    def _on_setting_changed(self, *_args):
+        if getattr(self, '_loading', True):
+            return
+        self.save_config()
+
+    def save_config(self):
+        self.logger.info('Saving config...')
         # Preserve the persisted pop-up position; it is managed by dragging the
         # window, not by this dialog, so we must not wipe it when saving options.
         existing = self.anki_utils.get_config()
         self.config = {
             "deck": self.deck_select.currentText(),
             "frequency": self.freq_select_map[self.freq_select.currentText()],
-            "enabled": self.enabled_check.checkState() == Qt.CheckState.Checked,
-            "click_to_reveal": self.click_to_reveal_check.checkState() == Qt.CheckState.Checked,
-            "enable_self_typing": self.enable_self_typing_check.checkState() == Qt.CheckState.Checked,
+            "enabled": self.enabled_check.isChecked(),
+            "click_to_reveal": self.click_to_reveal_check.isChecked(),
+            "enable_self_typing": self.enable_self_typing_check.isChecked(),
             "theme": self.theme_select.currentText(),
             "window_location": "bottom_right",
             "window_position": existing.get('window_position'),
             "show_marked_card_flag": False
         }
         self.anki_utils.set_config(self.config)
+        # Apply schedule-related changes (frequency / enabled) right away...
         self.ruzu_schedule.update_state(self.config)
+        # ...and apply the rest (theme, self-typing, etc.) to the live pop-up.
+        self._apply_to_live_popup()
         self.logger.debug("New config value: %s" % self.anki_utils.get_config())
-        self.close()
+
+    def _apply_to_live_popup(self):
+        # The pop-up instance is created once at add-on load (module level).
+        # Reach it via a lazy import to avoid a circular import at module load.
+        try:
+            from .. import ruzu_popup
+            ruzu_popup.apply_config()
+        except Exception:
+            self.logger.warning('Could not apply config to live pop-up', exc_info=True)
 
     def reset_window_position(self):
         # Clear the persisted position so the pop-up returns to its default spot.

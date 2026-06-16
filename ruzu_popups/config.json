@@ -3,8 +3,8 @@
     "frequency": 5,
     "enabled": false,
     "click_to_reveal": false,
-    "enable_self_typing": true,
-    "theme": "Classic",
+    "enable_self_typing": false,
+    "theme": "No Theme",
     "window_location": "bottom_right",
     "window_position": null,
     "show_marked_card_flag": false

@@ -16,9 +16,14 @@ import math
 # priority, so every theme pairs a card background with a strongly contrasting
 # default text colour. THEME_ORDER controls how themes appear in the options
 # drop-down; DEFAULT_THEME is used when the config has no (or an unknown) theme.
-DEFAULT_THEME = "Classic"
-THEME_ORDER = ["Classic", "Dark", "Sepia", "Solarized Light", "Nord", "High Contrast",
-               "macOS", "Windows 11", "Ubuntu"]
+#
+# NO_THEME is a special entry: it applies *no* custom styling at all, so the
+# pop-up falls back to the native Qt look (standard widget colours), exactly as
+# it behaved before themes were introduced. It is the default.
+NO_THEME = "No Theme"
+DEFAULT_THEME = NO_THEME
+THEME_ORDER = [NO_THEME, "Classic", "Dark", "Sepia", "Solarized Light", "Nord",
+               "High Contrast", "macOS", "Windows 11", "Ubuntu"]
 THEMES = {
     # Classic: former "Light" look.
     "Classic": {
@@ -275,16 +280,29 @@ class RuzuPopup(QDialog):
         self.enable_self_typing = config.get('enable_self_typing', False)
         self.typing_mode = False  # Always start with typing mode OFF
         self.pre_reveal_mode = False
+        # Which set of bottom controls is currently shown ('pre_reveal',
+        # 'question' or 'answer'). Lets us re-render the live pop-up when a
+        # setting changes while it is on screen.
+        self._display_state = None
+        # Last card content rendered into the web view, so we can repaint it with
+        # the new theme colours when the theme is switched while the pop-up is up.
+        # _last_card_kind is 'prep' (the reveal bell), 'card' (question/answer
+        # html) or None (nothing rendered yet).
+        self._last_card_kind = None
+        self._last_card_html = None
         self.last_typed_answer = ''
         self.skip_until = 0  # Epoch time until which pop-ups are skipped (in-memory only)
         # Restore the saved pop-up position from config (persists across Anki
         # restarts). Stored as {"x": int, "y": int}; None/invalid -> default spot.
         self.window_position = self._position_from_config(config.get('window_position'))
-        self.speed_mode = False  # Session only; immediately load next card after answering.
+        self.infinity_mode = False  # Session only; immediately load next card after answering.
         self.skip_options = [1, 2, 3, 5, 10, 15, 30, 60, 120, 180]
         self.logger = logging.getLogger(__name__.split('.')[0])
         # Active visual theme (resolved from config; refreshed on every render).
-        self._theme = THEMES.get(config.get('theme', DEFAULT_THEME), THEMES[DEFAULT_THEME])
+        # This is a safe placeholder until _apply_theme() runs at the end of
+        # __init__ (which resolves the real theme, including the dynamic
+        # "No Theme" palette that needs the already-created popup_window).
+        self._theme = THEMES.get(config.get('theme', DEFAULT_THEME), THEMES["Classic"])
         # Base button stylesheet for the current theme. Set properly in
         # _apply_theme(); initialised here because _apply_typing_toggle_ui()
         # (called during widget setup below) reads it before the first render.
@@ -357,16 +375,20 @@ class RuzuPopup(QDialog):
         self.typing_toggle_btn = None
         self.enable_self_typing = config.get('enable_self_typing', False)
         if self.enable_self_typing:
-            self.typing_toggle_btn = QPushButton(text="Self-typing: OFF")
+            self.typing_toggle_btn = QPushButton(text="Type Answer: Off")
             self.typing_toggle_btn.setMinimumWidth(140)
-            self.typing_toggle_btn.setToolTip("Self-typing: OFF")
+            self.typing_toggle_btn.setToolTip("Type Answer: Off")
             self.typing_toggle_btn.clicked.connect(lambda _: self.toggle_typing_mode())
         self.answer_input = QLineEdit()
         self.answer_input.setPlaceholderText("Type your answer...")
         self.answer_input.returnPressed.connect(self.show_answer_popup)
         self.feedback_label = QLabel()
+        self.feedback_label.setObjectName('ruzuFeedback')
         self.feedback_label.setWordWrap(True)
         self.feedback_label.setStyleSheet("font-size: 12px; font-weight: bold;")
+        # Hidden until a self-typing answer is evaluated, so it does not add an
+        # empty gap below the buttons (a hidden widget takes no layout space).
+        self.feedback_label.setVisible(False)
         self._apply_typing_toggle_ui()
 
         ###
@@ -374,8 +396,8 @@ class RuzuPopup(QDialog):
         ###
         self.settings_btn = QPushButton()
         self.settings_btn.setFixedSize(26, 26)
-        self.settings_btn.setToolTip("Settings")
-        self.settings_btn.setIcon(self._build_gear_icon())
+        self.settings_btn.setToolTip("Skip pop-ups for a while")
+        self.settings_btn.setIcon(self._build_sleep_icon())
         self.settings_btn.setIconSize(QtCore.QSize(18, 18))
         self.settings_btn.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
         self.settings_btn.setStyleSheet(
@@ -405,14 +427,14 @@ class RuzuPopup(QDialog):
         )
 
         ###
-        # Speed Mode icon (instantly load the next card after answering)
+        # Infinity Mode icon (instantly load the next card after answering)
         ###
-        self.speed_btn = QPushButton()
-        self.speed_btn.setFixedSize(26, 26)
-        self.speed_btn.setIconSize(QtCore.QSize(18, 18))
-        self.speed_btn.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
-        self.speed_btn.clicked.connect(lambda _: self.toggle_speed_mode())
-        self._apply_speed_toggle_ui()
+        self.infinity_btn = QPushButton()
+        self.infinity_btn.setFixedSize(26, 26)
+        self.infinity_btn.setIconSize(QtCore.QSize(18, 18))
+        self.infinity_btn.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+        self.infinity_btn.clicked.connect(lambda _: self.toggle_infinity_mode())
+        self._apply_infinity_toggle_ui()
 
         ###
         # Layout management - Add objects to main pop-up window
@@ -432,7 +454,7 @@ class RuzuPopup(QDialog):
         self.top_btn_grid.setContentsMargins(0, 4, 4, 0)
         self.top_btn_grid.setSpacing(4)
         self.top_btn_grid.addWidget(self.move_btn)
-        self.top_btn_grid.addWidget(self.speed_btn)
+        self.top_btn_grid.addWidget(self.infinity_btn)
         self.top_btn_grid.addWidget(self.settings_btn)
         self.grid.addLayout(
             self.top_btn_grid, 0, 0,
@@ -447,25 +469,25 @@ class RuzuPopup(QDialog):
         outer_layout.setContentsMargins(0, 0, 0, 0)
         outer_layout.addWidget(self.container)
 
-        # Timer used to defer the Speed Mode reload by one event-loop turn. Right
-        # after answering, Anki has not yet advanced to the next card, so we must
-        # yield to the event loop before re-rendering. The timer is parented to
-        # popup_window (a real QObject) so it fires reliably.
+        # Timer used to defer the Infinity Mode reload by one event-loop turn.
+        # Right after answering, Anki has not yet advanced to the next card, so
+        # we must yield to the event loop before re-rendering. The timer is
+        # parented to popup_window (a real QObject) so it fires reliably.
         #
         # IMPORTANT: the timeout is connected via a lambda, NOT directly to
-        # self._speed_reload. RuzuPopup derives from QDialog but never calls
+        # self._infinity_reload. RuzuPopup derives from QDialog but never calls
         # super().__init__(), so it is not an initialised QObject. If a bound
         # method of such an object is used as a slot, PyQt treats it as a slot on
         # an (invalid) QObject receiver and Qt silently never delivers the
         # signal. A lambda's __self__ is a plain Python object, so the call goes
         # through normally (this is why the answer buttons, which also use
         # lambdas, work).
-        self._speed_timer = QtCore.QTimer(self.popup_window)
-        self._speed_timer.setSingleShot(True)
-        self._speed_timer.timeout.connect(lambda: self._speed_reload())
-        # Counts how many times _speed_reload has waited for Anki to advance to
-        # the next card (used to cap the polling so it can never loop forever).
-        self._speed_retries = 0
+        self._infinity_timer = QtCore.QTimer(self.popup_window)
+        self._infinity_timer.setSingleShot(True)
+        self._infinity_timer.timeout.connect(lambda: self._infinity_reload())
+        # Counts how many times _infinity_reload has waited for Anki to advance
+        # to the next card (used to cap the polling so it can never loop forever).
+        self._infinity_retries = 0
 
         # Apply the configured theme to the window chrome, buttons and icons.
         self._apply_theme()
@@ -474,9 +496,59 @@ class RuzuPopup(QDialog):
         # Resolve the theme from config every time so changes made in the options
         # dialog take effect on the next pop-up without restarting Anki.
         name = self.anki_utils.get_config().get('theme', DEFAULT_THEME)
-        return THEMES.get(name, THEMES[DEFAULT_THEME])
+        if name in THEMES:
+            return THEMES[name]
+        # NO_THEME (or any unknown value): build a palette from Qt's standard
+        # colours so feedback/card rendering still has valid values to read.
+        return self._no_theme_palette()
+
+    def _is_no_theme(self):
+        # True when the configured theme is "No Theme" (native Qt look) or an
+        # unknown value that should fall back to no styling.
+        name = self.anki_utils.get_config().get('theme', DEFAULT_THEME)
+        return name not in THEMES
+
+    def _no_theme_palette(self):
+        # Derive a theme-shaped dict from the application's current Qt palette so
+        # the pop-up uses the native standard colours (and adapts to a light or
+        # dark Qt theme). Used as the colour source while "No Theme" is active.
+        palette = self.popup_window.palette()
+        role = QtGui.QPalette.ColorRole
+
+        def colour(which):
+            return palette.color(which).name()
+
+        window = colour(role.Window)
+        base = colour(role.Base)
+        text = colour(role.WindowText)
+        button = colour(role.Button)
+        button_text = colour(role.ButtonText)
+        mid = colour(role.Mid)
+        return {
+            "card_bg": base,
+            "card_fg": text,
+            "window_bg": window,
+            "btn_bg": button,
+            "btn_fg": button_text,
+            "btn_border": mid,
+            "btn_hover": button,
+            "icon": text,
+            "icon_off_tint": "transparent",
+            "icon_off_hover": "rgba(127, 127, 127, 0.20)",
+            "input_bg": base,
+            "input_fg": text,
+            "input_border": mid,
+            "feedback_correct": "#1c7c35",
+            "feedback_partial": "#9a3412",
+            "feedback_incorrect": "#b42318",
+            "window_radius": 0,
+        }
 
     def _apply_theme(self):
+        if self._is_no_theme():
+            self._apply_no_theme()
+            return
+
         theme = self._theme = self._current_theme()
 
         # Rounded radii for the window corners (anti-aliased via stylesheet).
@@ -533,13 +605,13 @@ class RuzuPopup(QDialog):
             " QPushButton:hover { background: %s; }"
             % (theme['icon_off_tint'], theme['icon_off_hover'])
         )
-        self.settings_btn.setIcon(self._build_gear_icon(icon_colour))
+        self.settings_btn.setIcon(self._build_sleep_icon(icon_colour))
         self.settings_btn.setStyleSheet(icon_btn_style)
         self.move_btn.setIcon(self._build_move_icon(icon_colour))
         self.move_btn.setStyleSheet(icon_btn_style)
 
-        # Speed icon depends on its on/off state, so delegate to its helper.
-        self._apply_speed_toggle_ui()
+        # Infinity icon depends on its on/off state, so delegate to its helper.
+        self._apply_infinity_toggle_ui()
 
         # Card surface background (web page paint colour) follows the theme.
         self._apply_card_view_bg()
@@ -548,6 +620,52 @@ class RuzuPopup(QDialog):
         self.feedback_label.setStyleSheet(
             "font-size: 12px; font-weight: bold; color: %s; padding: 0 12px;" % theme['card_fg']
         )
+
+    def _apply_no_theme(self):
+        # "No Theme": strip all custom widget styling so the pop-up renders in the
+        # native Qt look (default widget colours, square corners), exactly as it
+        # did before themes were added. self._theme still holds a palette-derived
+        # dict so card/feedback rendering has valid colours to read.
+        theme = self._theme = self._no_theme_palette()
+        palette = self.popup_window.palette()
+        role = QtGui.QPalette.ColorRole
+        window = palette.color(role.Window).name()
+        base = palette.color(role.Base).name()
+        text = palette.color(role.WindowText).name()
+
+        # Opaque native window background with square corners (no rounding), and
+        # the standard text colour for child labels.
+        self.container.setStyleSheet(
+            "#ruzuContainer { background: %s; }"
+            " QLabel { color: %s; background: transparent; }"
+            % (window, text)
+        )
+        # Card surface uses the default text-entry background (usually white).
+        self.card_bg_widget.setStyleSheet("#ruzuCardBg { background: %s; }" % base)
+
+        # Native buttons and input: clear stylesheets so Qt/the OS draws them.
+        self._btn_style = ""
+        for b in self.btn:
+            b.setStyleSheet("")
+        if self.typing_toggle_btn:
+            self._apply_typing_toggle_ui()
+        self.answer_input.setStyleSheet("")
+
+        # Top icons in the default text colour on native (transparent) buttons.
+        icon_colour = QtGui.QColor(text)
+        self.settings_btn.setIcon(self._build_sleep_icon(icon_colour))
+        self.settings_btn.setStyleSheet("")
+        self.move_btn.setIcon(self._build_move_icon(icon_colour))
+        self.move_btn.setStyleSheet("")
+
+        # Infinity icon depends on its on/off state, so delegate to its helper.
+        self._apply_infinity_toggle_ui()
+
+        # Card surface background (web page paint colour).
+        self._apply_card_view_bg()
+
+        # Feedback label base style (overridden per result in _set_feedback).
+        self.feedback_label.setStyleSheet("font-size: 12px; font-weight: bold;")
 
     def _apply_card_view_bg(self):
         # The web view is translucent: its background is painted by the rounded
@@ -671,75 +789,65 @@ class RuzuPopup(QDialog):
 
         return QtGui.QIcon(pixmap)
 
-    def _build_speed_icon(self, active, color=None):
+    def _build_infinity_icon(self, active, color=None):
         size = 36
         pixmap = QtGui.QPixmap(size, size)
         pixmap.fill(QtCore.Qt.GlobalColor.transparent)
 
         painter = QtGui.QPainter(pixmap)
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
-        painter.setPen(QtCore.Qt.PenStyle.NoPen)
         if active:
             colour = QtGui.QColor(245, 158, 11)
         else:
             colour = color if color is not None else QtGui.QColor(70, 70, 70)
-        painter.setBrush(QtGui.QBrush(colour))
+        pen = QtGui.QPen(colour)
+        pen.setWidthF(3.4)
+        pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(QtCore.Qt.PenJoinStyle.RoundJoin)
+        painter.setPen(pen)
+        painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
 
-        # A simple lightning bolt polygon (scaled to the 36x36 canvas).
-        points = [
-            (21, 3),
-            (9, 20),
-            (17, 20),
-            (15, 33),
-            (27, 16),
-            (19, 16),
-        ]
+        # Infinity symbol (lemniscate / horizontal figure-eight) as a stroked
+        # path: two lobes crossing in the centre of the 36x36 canvas.
         path = QtGui.QPainterPath()
-        path.moveTo(points[0][0], points[0][1])
-        for x, y in points[1:]:
-            path.lineTo(x, y)
-        path.closeSubpath()
+        path.moveTo(18, 18)
+        path.cubicTo(14, 10, 6, 10, 6, 18)    # centre -> up -> left side
+        path.cubicTo(6, 26, 14, 26, 18, 18)   # left side -> down -> centre
+        path.cubicTo(22, 10, 30, 10, 30, 18)  # centre -> up -> right side
+        path.cubicTo(30, 26, 22, 26, 18, 18)  # right side -> down -> centre
         painter.drawPath(path)
         painter.end()
 
         return QtGui.QIcon(pixmap)
 
-    def _build_gear_icon(self, color=None):
+    def _build_sleep_icon(self, color=None):
+        # "Zzz" sleep glyph: three Z letters of increasing size along a diagonal,
+        # matching the "put pop-ups to sleep for X minutes" function.
         size = 36
         pixmap = QtGui.QPixmap(size, size)
         pixmap.fill(QtCore.Qt.GlobalColor.transparent)
 
         painter = QtGui.QPainter(pixmap)
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
-        painter.setPen(QtCore.Qt.PenStyle.NoPen)
+        painter.setRenderHint(QtGui.QPainter.RenderHint.TextAntialiasing, True)
         icon_colour = color if color is not None else QtGui.QColor(70, 70, 70)
-        painter.setBrush(QtGui.QBrush(icon_colour))
+        painter.setPen(QtGui.QPen(icon_colour))
 
-        center = size / 2.0
-        outer_radius = size * 0.42
-        inner_radius = size * 0.30
-        teeth = 8
-
-        # Build a cog shape by alternating between outer and inner radius.
-        path = QtGui.QPainterPath()
-        steps = teeth * 2
-        for i in range(steps + 1):
-            angle = (math.pi * 2.0 * i) / steps
-            radius = outer_radius if i % 2 == 0 else inner_radius
-            x = center + radius * math.cos(angle)
-            y = center + radius * math.sin(angle)
-            if i == 0:
-                path.moveTo(x, y)
-            else:
-                path.lineTo(x, y)
-        path.closeSubpath()
-        painter.drawPath(path)
-
-        # Punch out the centre hole so it reads as a gear.
-        hole_radius = size * 0.14
-        painter.setCompositionMode(QtGui.QPainter.CompositionMode.CompositionMode_Clear)
-        painter.setBrush(QtGui.QBrush(QtCore.Qt.GlobalColor.black))
-        painter.drawEllipse(QtCore.QPointF(center, center), hole_radius, hole_radius)
+        # (font point size, centre x, centre y) for each Z, smallest first.
+        letters = [
+            (8, size * 0.30, size * 0.66),
+            (11, size * 0.50, size * 0.48),
+            (15, size * 0.72, size * 0.28),
+        ]
+        for point_size, cx, cy in letters:
+            font = QtGui.QFont("Segoe UI", point_size)
+            font.setBold(True)
+            painter.setFont(font)
+            metrics = QtGui.QFontMetricsF(font)
+            rect = metrics.boundingRect("Z")
+            x = cx - rect.width() / 2.0 - rect.left()
+            y = cy + rect.height() / 2.0 - rect.bottom()
+            painter.drawText(QtCore.QPointF(x, y), "Z")
         painter.end()
 
         return QtGui.QIcon(pixmap)
@@ -778,6 +886,7 @@ class RuzuPopup(QDialog):
 
     def show_show_button(self):
         self.pre_reveal_mode = True
+        self._display_state = 'pre_reveal'
         self._clear_bottom_controls()
         if self.typing_mode:
             self.bottom_grid.addWidget(self.answer_input)
@@ -788,6 +897,7 @@ class RuzuPopup(QDialog):
 
     def show_question_button(self):
         self.pre_reveal_mode = False
+        self._display_state = 'question'
         self._clear_bottom_controls()
         if self.typing_mode:
             self.btn[4].setText("Check")
@@ -802,6 +912,7 @@ class RuzuPopup(QDialog):
     def show_answer_buttons(self):
         # TODO - Take in actual buttons tuple?
         self.pre_reveal_mode = False
+        self._display_state = 'answer'
         self._clear_bottom_controls()
         if self.cur_button_count == 2:
             self.bottom_grid.addWidget(self.btn[0])  # Again
@@ -821,60 +932,64 @@ class RuzuPopup(QDialog):
             self.bottom_grid_2.addWidget(self.typing_toggle_btn)
         self.bottom_grid_2.addWidget(self.answer_input)
 
-    def _apply_speed_toggle_ui(self):
-        active = self.speed_mode
+    def _apply_infinity_toggle_ui(self):
+        active = self.infinity_mode
         theme = self._theme
         icon_colour = QtGui.QColor(theme['icon'])
-        self.speed_btn.setIcon(self._build_speed_icon(active, icon_colour))
+        self.infinity_btn.setIcon(self._build_infinity_icon(active, icon_colour))
         if active:
-            self.speed_btn.setToolTip("Speed Mode: ON")
-            self.speed_btn.setStyleSheet(
+            self.infinity_btn.setToolTip("Infinity Mode: ON")
+            self.infinity_btn.setStyleSheet(
                 "QPushButton { border: none; background: rgba(245, 158, 11, 0.25);"
                 " border-radius: 6px; }"
                 " QPushButton:hover { background: rgba(245, 158, 11, 0.40); }"
             )
         else:
-            self.speed_btn.setToolTip("Speed Mode: OFF")
-            self.speed_btn.setStyleSheet(
+            self.infinity_btn.setToolTip("Infinity Mode: OFF")
+            self.infinity_btn.setStyleSheet(
                 "QPushButton { border: none; background: %s;"
                 " border-radius: 6px; }"
                 " QPushButton:hover { background: %s; }"
                 % (theme['icon_off_tint'], theme['icon_off_hover'])
             )
 
-    def toggle_speed_mode(self):
-        self.speed_mode = not self.speed_mode
-        self._apply_speed_toggle_ui()
-        self.logger.debug('speed_mode toggled to %s' % self.speed_mode)
+    def toggle_infinity_mode(self):
+        self.infinity_mode = not self.infinity_mode
+        self._apply_infinity_toggle_ui()
+        self.logger.debug('infinity_mode toggled to %s' % self.infinity_mode)
 
     def _apply_typing_toggle_ui(self):
         if not self.typing_toggle_btn:
             return
         base_style = self._btn_style
         if self.typing_mode:
-            self.typing_toggle_btn.setText("Self-typing: ON")
-            self.typing_toggle_btn.setToolTip("Self-typing: ON")
+            self.typing_toggle_btn.setText("Type Answer: On")
+            self.typing_toggle_btn.setToolTip("Type Answer: On")
             self.typing_toggle_btn.setStyleSheet(
                 base_style + " QPushButton { font-weight: bold; }")
         else:
-            self.typing_toggle_btn.setText("Self-typing: OFF")
-            self.typing_toggle_btn.setToolTip("Self-typing: OFF")
+            self.typing_toggle_btn.setText("Type Answer: Off")
+            self.typing_toggle_btn.setToolTip("Type Answer: Off")
             self.typing_toggle_btn.setStyleSheet(base_style)
 
     def _set_feedback(self, evaluation):
         theme = self._theme
-        label_colour = self._feedback_line_colour(theme['feedback_incorrect'])
+        self.feedback_label.setVisible(True)
+        # The feedback is shown inside a block painted with the card background
+        # colour (see _feedback_label_style), so it always matches the card above
+        # and stays readable. The text colour signals the result: green when
+        # correct, orange when almost correct, red when incorrect.
         if evaluation['is_correct'] and not evaluation['accepted_with_one_error']:
+            label_colour = self._feedback_line_colour(theme['feedback_correct'])
             self.feedback_label.setText(
                 '<span style="color:%s;">Correct:</span> "%s"' % (
                     label_colour, html.escape(evaluation['typed']))
             )
-            self.feedback_label.setStyleSheet(
-                "font-size: 12px; font-weight: bold; padding: 0 12px; color: %s;"
-                % label_colour)
+            self.feedback_label.setStyleSheet(self._feedback_label_style(label_colour))
             return
 
         if evaluation['accepted_with_one_error']:
+            label_colour = self._feedback_line_colour(theme['feedback_partial'])
             self.feedback_label.setText(
                 '<span style="color:%s;">Almost correct (1 character tolerated).</span><br>'
                 '<span style="color:%s;">Your answer:</span> %s<br>'
@@ -882,11 +997,10 @@ class RuzuPopup(QDialog):
                     label_colour, label_colour, evaluation['typed_markup'],
                     label_colour, evaluation['expected_markup'])
             )
-            self.feedback_label.setStyleSheet(
-                "font-size: 12px; font-weight: bold; padding: 0 12px; color: %s;"
-                % label_colour)
+            self.feedback_label.setStyleSheet(self._feedback_label_style(label_colour))
             return
 
+        label_colour = self._feedback_line_colour(theme['feedback_incorrect'])
         self.feedback_label.setText(
             '<span style="color:%s;">Incorrect.</span><br>'
             '<span style="color:%s;">Your answer:</span> %s<br>'
@@ -894,25 +1008,43 @@ class RuzuPopup(QDialog):
                 label_colour, label_colour, evaluation['typed_markup'],
                 label_colour, evaluation['expected_markup'])
         )
-        self.feedback_label.setStyleSheet(
-            "font-size: 12px; font-weight: bold; padding: 0 12px; color: %s;"
-            % label_colour)
+        self.feedback_label.setStyleSheet(self._feedback_label_style(label_colour))
+        self.logger.debug(
+            'feedback box set: card_bg=%s text=%s sheet=%s'
+            % (theme['card_bg'], label_colour, self.feedback_label.styleSheet()))
+
+    def _feedback_label_style(self, text_colour):
+        # Style for the feedback block: it uses the theme's *card* background
+        # colour (matching the card surface shown above it) with comfortable
+        # padding and a small inset margin, so it reads as a tidy block. The
+        # corners are rounded when the theme itself is rounded (and square for
+        # "No Theme"), capped so a short block never looks pill-shaped.
+        #
+        # The selector targets the label by objectName (QLabel#ruzuFeedback) so
+        # it beats the container's generic "QLabel { background: transparent; }"
+        # rule (an id selector has higher specificity than a type selector);
+        # otherwise the transparent ancestor rule would hide the block.
+        theme = self._theme
+        radius = min(int(theme.get('window_radius', 0) or 0), 10)
+        return (
+            "QLabel#ruzuFeedback { font-size: 12px; font-weight: bold; color: %s;"
+            " background: %s; border-radius: %dpx;"
+            " padding: 8px 12px; margin: 0 8px 8px 8px; }"
+            % (text_colour, theme['card_bg'], radius)
+        )
 
     def _feedback_line_colour(self, semantic_colour):
-        # A theme can explicitly pin the feedback label colour (useful for
-        # darker chrome variants like Ubuntu where neutral light-grey is best).
-        forced = self._theme.get('feedback_label_fg')
-        if forced:
-            return forced
+        # Keep the semantic colour's hue but nudge its lightness until it has
+        # enough contrast against the card background it now sits on.
         return self._readable_feedback_colour(semantic_colour)
 
     def _readable_feedback_colour(self, hexcolour):
-        # The feedback text sits on the window background (the container), whose
-        # brightness varies a lot between themes (e.g. Ubuntu's dark aubergine).
-        # To guarantee the green/orange/red feedback stays legible in *every*
-        # theme, we keep the colour's hue but nudge its lightness until it has
-        # enough WCAG contrast against the current window background.
-        bg = QtGui.QColor(self._theme['window_bg'])
+        # The feedback text sits inside a block painted with the theme's card
+        # background colour. To guarantee the green/orange/red feedback stays
+        # legible in *every* theme, we keep the colour's hue but nudge its
+        # lightness until it has enough WCAG contrast against that card
+        # background.
+        bg = QtGui.QColor(self._theme['card_bg'])
         fg = QtGui.QColor(hexcolour)
         if not fg.isValid() or not bg.isValid():
             return hexcolour
@@ -945,6 +1077,8 @@ class RuzuPopup(QDialog):
 
     def _clear_feedback(self):
         self.feedback_label.setText('')
+        # Collapse the label so no empty space remains below the buttons.
+        self.feedback_label.setVisible(False)
         self.feedback_label.setStyleSheet(
             "font-size: 12px; font-weight: bold; padding: 0 12px; color: %s;" % self._theme['card_fg'])
 
@@ -1107,6 +1241,68 @@ class RuzuPopup(QDialog):
                 if self.typing_mode:
                     self.answer_input.setFocus()
 
+    def apply_config(self):
+        # Apply the currently saved config to this already-running pop-up so that
+        # option changes take effect immediately, without an Anki restart. The
+        # pop-up is created once at add-on load, so values cached in __init__
+        # (e.g. enable_self_typing) would otherwise stay stale until restart.
+        config = self.anki_utils.get_config()
+        self._set_self_typing_enabled(config.get('enable_self_typing', False))
+
+        # Refresh chrome (theme + button styling) for the (possibly new) theme.
+        self._apply_theme()
+
+        # If a pop-up is currently on screen, re-render its controls so a newly
+        # toggled option (e.g. self-typing) shows up right away.
+        if self.popup_window.isVisible():
+            try:
+                self._render_current_controls()
+            except Exception:
+                self.logger.warning('Could not refresh live pop-up controls', exc_info=True)
+            # Repaint the card itself so the new theme's text colour applies
+            # immediately, instead of only on the next pop-up. Kept in its own
+            # try/except so a controls failure can't block the card re-render.
+            try:
+                self._rerender_current_card()
+            except Exception:
+                self.logger.warning('Could not re-render live card', exc_info=True)
+
+    def _rerender_current_card(self):
+        # Re-render the card content currently shown in the web view using the
+        # active theme (its colours are read from self._theme during render).
+        if self._last_card_kind == 'prep':
+            self.prep_card()
+        elif self._last_card_kind == 'card':
+            self.update_card(self._last_card_html)
+
+    def _set_self_typing_enabled(self, enabled):
+        # Create or tear down the self-typing toggle button to match the setting,
+        # keeping internal state consistent.
+        if enabled and self.typing_toggle_btn is None:
+            self.typing_toggle_btn = QPushButton(text="Type Answer: Off")
+            self.typing_toggle_btn.setMinimumWidth(140)
+            self.typing_toggle_btn.setToolTip("Type Answer: Off")
+            self.typing_toggle_btn.clicked.connect(lambda _: self.toggle_typing_mode())
+            self._apply_typing_toggle_ui()
+        elif not enabled and self.typing_toggle_btn is not None:
+            button = self.typing_toggle_btn
+            self.typing_toggle_btn = None
+            button.setParent(None)
+            button.deleteLater()
+        if not enabled:
+            # Leaving typing mode behind when the feature is switched off.
+            self.typing_mode = False
+        self.enable_self_typing = enabled
+
+    def _render_current_controls(self):
+        # Re-render whichever set of bottom controls is currently displayed.
+        if self._display_state == 'pre_reveal':
+            self.show_show_button()
+        elif self._display_state == 'question':
+            self.show_question_button()
+        elif self._display_state == 'answer':
+            self.show_answer_buttons()
+
     def reset_card(self):
         self.card_view.setHtml(None)
 
@@ -1114,6 +1310,8 @@ class RuzuPopup(QDialog):
         # Refresh chrome in case the theme changed since the last render.
         self._apply_theme()
         theme = self._theme
+        self._last_card_kind = 'prep'
+        self._last_card_html = None
         # Update card with 'Reveal card' html
         self.card_view.setHtml("""
                     <!doctype html>
@@ -1134,6 +1332,8 @@ class RuzuPopup(QDialog):
         # Refresh chrome in case the theme changed since the last render.
         self._apply_theme()
         theme = self._theme
+        self._last_card_kind = 'card'
+        self._last_card_html = card
         # TODO - Look into using existing AnkiWebView object to render duplicate card with full compatibility
         # Note: the card HTML is concatenated (not %-formatted) so that any '%'
         # characters inside the card content cannot break string formatting.
@@ -1229,13 +1429,17 @@ class RuzuPopup(QDialog):
             self.show_question_popup()
         else:
             self.cur_button_count = len(current_card['button_list'])
+            self.show_answer_buttons()
+            self.update_card(current_card['answer'])
+            # Feedback is set AFTER update_card: update_card() calls _apply_theme()
+            # which rewrites the feedback label's stylesheet, so setting the
+            # feedback block last makes sure its styling (the card-coloured box)
+            # is the one that actually sticks.
             if self.typing_mode and typed_answer:
                 evaluation = self._evaluate_typed_answer(typed_answer, current_card['answer'])
                 self._set_feedback(evaluation)
             else:
                 self._clear_feedback()
-            self.show_answer_buttons()
-            self.update_card(current_card['answer'])
 
             # Show pop-up
             self.set_card_position()
@@ -1250,12 +1454,12 @@ class RuzuPopup(QDialog):
         if self.popup_window.isVisible():
             self.popup_window.raise_()
 
-    def _speed_reload(self):
-        # Load the next card for Speed Mode. Right after answering, Anki may not
-        # have advanced to the next card yet. If we re-rendered immediately the
-        # "skip rerender" guard in show_question_popup() would still see the old
-        # card and abort, leaving the pop-up stuck on the answered card. So we
-        # poll: if Anki still reports the just-answered card, wait a moment and
+    def _infinity_reload(self):
+        # Load the next card for Infinity Mode. Right after answering, Anki may
+        # not have advanced to the next card yet. If we re-rendered immediately
+        # the "skip rerender" guard in show_question_popup() would still see the
+        # old card and abort, leaving the pop-up stuck on the answered card. So
+        # we poll: if Anki still reports the just-answered card, wait a moment and
         # try again (capped so it can never loop forever).
         if self.current_card_id is not None and self.anki_utils.review_is_active():
             try:
@@ -1263,11 +1467,11 @@ class RuzuPopup(QDialog):
             except Exception:
                 current_card = None
             if current_card is not None and current_card['card_id'] == self.current_card_id:
-                if self._speed_retries < 40:  # ~2s worth of 50ms polls
-                    self._speed_retries += 1
-                    self._speed_timer.start(50)
+                if self._infinity_retries < 40:  # ~2s worth of 50ms polls
+                    self._infinity_retries += 1
+                    self._infinity_timer.start(50)
                     return
-        self._speed_retries = 0
+        self._infinity_retries = 0
 
         # Anki has advanced (or we gave up waiting). Render the next card. Unlike
         # show_popup() this deliberately ignores the skip window and the "user is
@@ -1391,12 +1595,12 @@ class RuzuPopup(QDialog):
             # TODO - Handle this better, notify user?
             self.logger.warning('The card you tried to answer is no longer the card being reviewed...')
 
-        # In Speed Mode, load the next card automatically. The reload is deferred
-        # via a timer so Anki has a chance to advance to the next card first;
-        # _speed_reload() then polls until the new card is actually available.
-        if self.speed_mode:
-            self._speed_retries = 0
-            self._speed_timer.start(50)
+        # In Infinity Mode, load the next card automatically. The reload is
+        # deferred via a timer so Anki has a chance to advance to the next card
+        # first; _infinity_reload() then polls until the new card is available.
+        if self.infinity_mode:
+            self._infinity_retries = 0
+            self._infinity_timer.start(50)
         else:
             self.hide_popup()
 
